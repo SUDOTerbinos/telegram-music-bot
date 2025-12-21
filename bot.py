@@ -168,7 +168,8 @@ async def set_bot_metadata(application: Application) -> None:
         commands = [
             BotCommand("start", "Start and get help"),
             BotCommand("help", "Show help and usage"),
-            BotCommand("yt", "Download audio from YouTube (opt-in)")
+            BotCommand("yt", "Download audio from YouTube (opt-in)"),
+
         ]
         await application.bot.set_my_commands(commands)
         # Short description shown in the bot profile (on newer clients)
@@ -180,7 +181,7 @@ async def set_bot_metadata(application: Application) -> None:
 
         try:
             await application.bot.set_my_description(
-                "Send a song name to fetch audio from Jamendo, Deemix/Deezer, or YouTube (fallback)."
+                "Send a song name to fetch audio from Jamendo, Deemix/Deezer, or YouTube. If you want to contact the developer use @NULLDNF"
             )
         except Exception:
             logger.debug("set_my_description not available on this installation")
