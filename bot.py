@@ -1,6 +1,6 @@
 import logging
 import os
-from telegram import Update
+from telegram import Update, BotCommand, MenuButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import requests
 from deezer import Deezer
@@ -137,6 +137,55 @@ def download_from_youtube(query: str):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     await update.message.reply_text("🎶 Hi! I'm a music bot. Send me a song name and I'll find it for you.")
+
+
+async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Download audio from YouTube directly (usage: /yt <query>)"""
+    args = context.args or []
+    if not args:
+        await update.message.reply_text("Usage: /yt <song name or artist - title>\nExample: /yt Shape of You - Ed Sheeran")
+        return
+
+    query = " ".join(args)
+    await update.message.reply_text(f"🔍 Searching YouTube for '{query}' and downloading audio...")
+    path, err = download_from_youtube(query)
+    if not path:
+        await update.message.reply_text("❌ Could not download from YouTube: %s" % err)
+        return
+
+    try:
+        await update.message.reply_audio(audio=open(path, 'rb'))
+    finally:
+        try:
+            shutil.rmtree(os.path.dirname(path))
+        except Exception:
+            logger.exception("Failed to cleanup yt-dlp temp files %s", path)
+
+
+async def set_bot_metadata(application: Application) -> None:
+    """Set bot commands and descriptions programmatically so users see custom text instead of default prompts."""
+    try:
+        commands = [
+            BotCommand("start", "Start and get help"),
+            BotCommand("help", "Show help and usage"),
+            BotCommand("yt", "Download audio from YouTube (opt-in)")
+        ]
+        await application.bot.set_my_commands(commands)
+        # Short description shown in the bot profile (on newer clients)
+        try:
+            await application.bot.set_my_short_description("Search & deliver music (Jamendo/Deezer/YouTube)")
+        except Exception:
+            # Older API / Bot may not support this method depending on library version
+            logger.debug("set_my_short_description not available on this installation")
+
+        try:
+            await application.bot.set_my_description(
+                "Send a song name to fetch audio from Jamendo, Deemix/Deezer, or YouTube (fallback)."
+            )
+        except Exception:
+            logger.debug("set_my_description not available on this installation")
+    except Exception as e:
+        logger.exception("Failed to set bot metadata: %s", e)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
@@ -295,8 +344,15 @@ def main() -> None:
     if not getattr(application, "_initialized", False):
         loop.run_until_complete(application.initialize())
 
+    # Set bot commands, descriptions and menu to commands so users see helpful text
+    try:
+        loop.run_until_complete(set_bot_metadata(application))
+    except Exception:
+        logger.exception("Failed to set bot metadata during startup")
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("yt", yt_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_music))
 
     application.run_polling()
